@@ -1,1 +1,44 @@
 
+name: Build APK
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup NDK
+        uses: android-actions/setup-android@v3
+      - name: Build C++
+        run: |
+          cmake -B build -DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/25.1.8937393/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
+          cmake --build build
+      - name: Create APK
+        run: |
+          mkdir -p apk_build/lib/arm64-v8a
+          cp build/libmojaigra.so apk_build/lib/arm64-v8a/
+          mkdir -p apk_build/res/values
+          echo '<resources><string name="app_name">Moja Igra</string></resources>' > apk_build/res/values/strings.xml
+          cat << 'EOF' > apk_build/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.aki.mojaigra">
+              <application android:label="Moja Igra" android:hasCode="false">
+                  <activity android:name="android.app.NativeActivity" android:screenOrientation="portrait">
+                      <meta-data android:name="android.app.lib_name" android:value="mojaigra" />
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+          cd apk_build
+          $ANDROID_HOME/build-tools/34.0.0/aapt2 link -o app.apk -I $ANDROID_HOME/platforms/android-33/android.jar --manifest AndroidManifest.xml -R res/values/strings.xml
+          zip -r app.apk lib/
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MojaIgra-APK
+          path: apk_build/app.apk
